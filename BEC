@@ -1,0 +1,61 @@
+import networkx as nx
+import numpy as np
+import matplotlib.pyplot as plt
+
+def incr_deg(draws, degrees):
+    for i in range(degrees.size):
+        if i in draws:
+            degrees[i] += 1
+            
+    return degrees
+
+n = 3    # starting nodes
+t = 1000    # nodes and time-steps    
+m = 2    # links added at each time step
+T = np.linspace(0.1, 10)
+
+degrees = np.empty((T.size, t))
+energy_samples = np.empty((T.size, t))
+fitness = np.empty((T.size, t))
+probs_list = []
+Z_t = np.empty(T.size)
+mu = np.empty(T.size)
+factor = np.empty((T.size, t))
+
+for temp in range(T.size):
+    G = nx.complete_graph(n)
+    
+    for j in range(n):
+        degrees[temp, j] = G.degree(j)
+        
+    for idx in range(t):        
+        if idx >= n:
+            draws = np.random.choice(list(range(idx)), size = m, replace = False, p = probs_list)
+            G.add_node(idx)
+            G.add_edges_from((idx, i) for i in draws)
+            
+            degrees[temp, idx] = G.degree(idx)
+            degrees[temp, :] = incr_deg(draws, degrees[temp, :])
+        
+        energy_samples[temp, idx] = np.sqrt(np.random.uniform(0, 1))
+        fitness[temp, idx] = np.exp(- energy_samples[temp, idx]/T[temp])
+        factor[temp, idx] = fitness[temp, idx]*degrees[temp, idx]
+        
+        probs_list = [factor[temp, i]/np.sum(factor[temp, :(idx+1)]) for i in range(idx+1)]        
+        
+    Z_t[temp] = np.sum([degrees[temp, node] * np.exp(-1/T[temp] * energy_samples[temp, node]) for node in range(t)])
+    mu[temp] = -T[temp] * np.log(Z_t[temp]/(m*t))
+
+print("Threshold temperature for BEC is ", round(T[np.argmin(np.abs(mu))], 3))
+    
+plt.figure(figsize=(10, 6))
+plt.plot(T, np.abs(mu), marker='.', linestyle='-')
+plt.axvline(x = T[np.argmin(np.abs(mu))], color='r', linestyle='--')
+plt.xscale('log')
+plt.yscale('log')
+plt.title('Chemical potential vs Temperature')
+plt.xlabel('T')
+plt.ylabel('| chemical potential |')
+plt.annotate('BEC', xy=(3, 5), xytext=(.4, .1))
+plt.annotate('FGR', xy=(3, 5), xytext=(1.5, .1))
+plt.show()
